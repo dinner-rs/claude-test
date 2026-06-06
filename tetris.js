@@ -30,6 +30,33 @@
   const linesEl = document.getElementById('tetris-lines');
   const startBtn = document.getElementById('tetris-start');
 
+  // ── Face image ──
+  const faceImg = new Image();
+  faceImg.crossOrigin = 'anonymous';
+  let faceLoaded = false;
+  faceImg.onload = () => { faceLoaded = true; };
+  faceImg.onerror = () => {
+    // Retry without crossOrigin (allows drawing but taints canvas)
+    const img2 = new Image();
+    img2.onload = () => { Object.assign(faceImg, img2); faceLoaded = true; };
+    img2.src = faceImg.src;
+  };
+  faceImg.src = 'https://www.biteki.com/wp-content/uploads/2025/05/202507g-teranishi-main.jpg';
+
+  // Draw image cropped to cover a square, biased toward the top (face area)
+  function drawFaceCover(c, x, y, size) {
+    const iw = faceImg.naturalWidth, ih = faceImg.naturalHeight;
+    const scale = Math.max(size / iw, size / ih);
+    const sw = size / scale, sh = size / scale;
+    const sx = (iw - sw) / 2;
+    const sy = (ih - sh) * 0.15; // bias toward top for face
+    try {
+      c.drawImage(faceImg, sx, sy, sw, sh, 0, 0, size, size);
+    } catch (e) {
+      faceLoaded = false;
+    }
+  }
+
   let board, piece, pieceX, pieceY, nextPiece;
   let score, level, lines, running, animId, lastTime, dropInterval;
 
@@ -43,7 +70,6 @@
   }
 
   function rotate(matrix) {
-    const n = matrix.length;
     return matrix[0].map((_, i) => matrix.map(row => row[i]).reverse());
   }
 
@@ -60,11 +86,9 @@
   }
 
   function merge() {
-    for (let r = 0; r < piece.length; r++) {
-      for (let c = 0; c < piece[r].length; c++) {
+    for (let r = 0; r < piece.length; r++)
+      for (let c = 0; c < piece[r].length; c++)
         if (piece[r][c]) board[pieceY + r][pieceX + c] = piece[r][c];
-      }
-    }
   }
 
   function clearLines() {
@@ -78,8 +102,7 @@
       }
     }
     if (!cleared) return;
-    const pts = [0, 100, 300, 500, 800][cleared] * level;
-    score += pts;
+    score += [0, 100, 300, 500, 800][cleared] * level;
     lines += cleared;
     level = Math.floor(lines / 10) + 1;
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
@@ -93,9 +116,7 @@
     nextPiece = randomPiece();
     pieceX = Math.floor((COLS - piece[0].length) / 2);
     pieceY = 0;
-    if (collides(board, piece, pieceX, pieceY)) {
-      gameOver();
-    }
+    if (collides(board, piece, pieceX, pieceY)) gameOver();
     drawNext();
   }
 
@@ -114,26 +135,44 @@
     startBtn.textContent = 'RETRY';
   }
 
-  function drawBlock(c, x, y, size) {
-    if (!c) return;
-    const color = COLORS[c];
-    ctx.fillStyle = color;
-    ctx.fillRect(x + 1, y + 1, size - 2, size - 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
-    ctx.fillRect(x + 1, y + 1, size - 2, 4);
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
-    ctx.fillRect(x + 1, y + size - 5, size - 2, 4);
+  function drawBlock(color, x, y, size, targetCtx) {
+    const c = targetCtx || ctx;
+    c.save();
+    c.beginPath();
+    c.rect(x + 1, y + 1, size - 2, size - 2);
+    c.clip();
+
+    if (faceLoaded) {
+      c.translate(x + 1, y + 1);
+      drawFaceCover(c, x, y, size - 2);
+      c.translate(-(x + 1), -(y + 1));
+      // Color tint overlay to distinguish piece types
+      c.fillStyle = color + '55';
+      c.fillRect(x + 1, y + 1, size - 2, size - 2);
+    } else {
+      c.fillStyle = color;
+      c.fillRect(x + 1, y + 1, size - 2, size - 2);
+      c.fillStyle = 'rgba(255,255,255,0.25)';
+      c.fillRect(x + 1, y + 1, size - 2, 4);
+      c.fillStyle = 'rgba(0,0,0,0.2)';
+      c.fillRect(x + 1, y + size - 5, size - 2, 4);
+    }
+
+    c.restore();
+    // Border
+    c.strokeStyle = color;
+    c.lineWidth = 1.5;
+    c.strokeRect(x + 1.75, y + 1.75, size - 3.5, size - 3.5);
   }
 
   function drawBoard() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // grid
     ctx.strokeStyle = 'rgba(255,255,255,0.04)';
     ctx.lineWidth = 0.5;
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         ctx.strokeRect(c * BLOCK, r * BLOCK, BLOCK, BLOCK);
-        drawBlock(board[r][c], c * BLOCK, r * BLOCK, BLOCK);
+        if (board[r][c]) drawBlock(COLORS[board[r][c]], c * BLOCK, r * BLOCK, BLOCK);
       }
     }
   }
@@ -142,24 +181,20 @@
     let gy = pieceY;
     while (!collides(board, piece, pieceX, gy + 1)) gy++;
     if (gy === pieceY) return;
-    ctx.globalAlpha = 0.22;
-    for (let r = 0; r < piece.length; r++) {
-      for (let c = 0; c < piece[r].length; c++) {
+    ctx.globalAlpha = 0.2;
+    for (let r = 0; r < piece.length; r++)
+      for (let c = 0; c < piece[r].length; c++)
         if (piece[r][c]) {
           ctx.fillStyle = COLORS[piece[r][c]];
           ctx.fillRect((pieceX + c) * BLOCK + 1, (gy + r) * BLOCK + 1, BLOCK - 2, BLOCK - 2);
         }
-      }
-    }
     ctx.globalAlpha = 1;
   }
 
   function drawPiece() {
-    for (let r = 0; r < piece.length; r++) {
-      for (let c = 0; c < piece[r].length; c++) {
-        if (piece[r][c]) drawBlock(piece[r][c], (pieceX + c) * BLOCK, (pieceY + r) * BLOCK, BLOCK);
-      }
-    }
+    for (let r = 0; r < piece.length; r++)
+      for (let c = 0; c < piece[r].length; c++)
+        if (piece[r][c]) drawBlock(COLORS[piece[r][c]], (pieceX + c) * BLOCK, (pieceY + r) * BLOCK, BLOCK);
   }
 
   function drawNext() {
@@ -167,31 +202,19 @@
     const nb = 24;
     const offX = Math.floor((nextCanvas.width - nextPiece[0].length * nb) / 2);
     const offY = Math.floor((nextCanvas.height - nextPiece.length * nb) / 2);
-    for (let r = 0; r < nextPiece.length; r++) {
-      for (let c = 0; c < nextPiece[r].length; c++) {
-        if (!nextPiece[r][c]) continue;
-        const color = COLORS[nextPiece[r][c]];
-        nextCtx.fillStyle = color;
-        nextCtx.fillRect(offX + c * nb + 1, offY + r * nb + 1, nb - 2, nb - 2);
-        nextCtx.fillStyle = 'rgba(255,255,255,0.25)';
-        nextCtx.fillRect(offX + c * nb + 1, offY + r * nb + 1, nb - 2, 3);
-      }
-    }
+    for (let r = 0; r < nextPiece.length; r++)
+      for (let c = 0; c < nextPiece[r].length; c++)
+        if (nextPiece[r][c])
+          drawBlock(COLORS[nextPiece[r][c]], offX + c * nb, offY + r * nb, nb, nextCtx);
   }
 
   function loop(ts) {
     if (!running) return;
     animId = requestAnimationFrame(loop);
-    const delta = ts - lastTime;
-    if (delta >= dropInterval) {
+    if (ts - lastTime >= dropInterval) {
       lastTime = ts;
-      if (!collides(board, piece, pieceX, pieceY + 1)) {
-        pieceY++;
-      } else {
-        merge();
-        clearLines();
-        spawnPiece();
-      }
+      if (!collides(board, piece, pieceX, pieceY + 1)) pieceY++;
+      else { merge(); clearLines(); spawnPiece(); }
     }
     drawBoard();
     drawGhost();
@@ -215,19 +238,12 @@
 
   startBtn.addEventListener('click', startGame);
 
-  // ── Keyboard ──
   document.addEventListener('keydown', e => {
     if (!running) return;
     switch (e.code) {
-      case 'ArrowLeft':
-        if (!collides(board, piece, pieceX - 1, pieceY)) pieceX--;
-        break;
-      case 'ArrowRight':
-        if (!collides(board, piece, pieceX + 1, pieceY)) pieceX++;
-        break;
-      case 'ArrowDown':
-        if (!collides(board, piece, pieceX, pieceY + 1)) pieceY++;
-        break;
+      case 'ArrowLeft':  if (!collides(board, piece, pieceX - 1, pieceY)) pieceX--; break;
+      case 'ArrowRight': if (!collides(board, piece, pieceX + 1, pieceY)) pieceX++; break;
+      case 'ArrowDown':  if (!collides(board, piece, pieceX, pieceY + 1)) pieceY++; break;
       case 'ArrowUp': case 'KeyZ': {
         const rot = rotate(piece);
         if (!collides(board, rot, pieceX, pieceY)) piece = rot;
@@ -242,7 +258,6 @@
     }
   });
 
-  // ── Touch buttons ──
   document.querySelectorAll('.t-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!running) return;
@@ -258,7 +273,6 @@
     });
   });
 
-  // ── Initial render ──
   ctx.fillStyle = '#0a0a18';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = 'rgba(255,255,255,0.3)';
