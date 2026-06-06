@@ -21,6 +21,8 @@
     [[0,0,7],[7,7,7],[0,0,0]],                   // L
   ];
 
+  const FACE_URL = 'https://www.biteki.com/wp-content/uploads/2025/05/202507g-teranishi-main.jpg';
+
   const canvas = document.getElementById('tetris-board');
   const ctx = canvas.getContext('2d');
   const nextCanvas = document.getElementById('tetris-next');
@@ -30,30 +32,37 @@
   const linesEl = document.getElementById('tetris-lines');
   const startBtn = document.getElementById('tetris-start');
 
-  // ── Face image ──
-  const faceImg = new Image();
-  faceImg.crossOrigin = 'anonymous';
-  let faceLoaded = false;
-  faceImg.onload = () => { faceLoaded = true; };
-  faceImg.onerror = () => {
-    // Retry without crossOrigin (allows drawing but taints canvas)
-    const img2 = new Image();
-    img2.onload = () => { Object.assign(faceImg, img2); faceLoaded = true; };
-    img2.src = faceImg.src;
-  };
-  faceImg.src = 'https://www.biteki.com/wp-content/uploads/2025/05/202507g-teranishi-main.jpg';
+  // ── Face image loading ──
+  // faceImg holds the actual usable Image element once loaded.
+  let faceImg = null;
 
-  // Draw image cropped to cover a square, biased toward the top (face area)
-  function drawFaceCover(c, x, y, size) {
+  (function loadFace() {
+    const img1 = new Image();
+    img1.crossOrigin = 'anonymous';
+    img1.onload = () => { faceImg = img1; };
+    img1.onerror = () => {
+      // CORS failed — retry without crossOrigin (canvas will be tainted but still renders)
+      const img2 = new Image();
+      img2.onload = () => { faceImg = img2; };
+      img2.src = FACE_URL;
+    };
+    img1.src = FACE_URL;
+  })();
+
+  // Draw faceImg cropped to cover (size × size), biased toward top for face area
+  function drawFaceCover(c, size) {
+    if (!faceImg || !faceImg.naturalWidth) return false;
     const iw = faceImg.naturalWidth, ih = faceImg.naturalHeight;
     const scale = Math.max(size / iw, size / ih);
     const sw = size / scale, sh = size / scale;
     const sx = (iw - sw) / 2;
-    const sy = (ih - sh) * 0.15; // bias toward top for face
+    const sy = (ih - sh) * 0.15;
     try {
       c.drawImage(faceImg, sx, sy, sw, sh, 0, 0, size, size);
-    } catch (e) {
-      faceLoaded = false;
+      return true;
+    } catch (_) {
+      faceImg = null; // taint or security error — disable face
+      return false;
     }
   }
 
@@ -74,14 +83,13 @@
   }
 
   function collides(b, p, ox, oy) {
-    for (let r = 0; r < p.length; r++) {
+    for (let r = 0; r < p.length; r++)
       for (let c = 0; c < p[r].length; c++) {
         if (!p[r][c]) continue;
         const nx = ox + c, ny = oy + r;
         if (nx < 0 || nx >= COLS || ny >= ROWS) return true;
         if (ny >= 0 && b[ny][nx]) return true;
       }
-    }
     return false;
   }
 
@@ -135,20 +143,30 @@
     startBtn.textContent = 'RETRY';
   }
 
-  function drawBlock(color, x, y, size, targetCtx) {
-    const c = targetCtx || ctx;
+  // Draw one block at (x, y) with given size, into context c.
+  // Uses face image when available; falls back to solid color.
+  function drawBlock(color, x, y, size, c) {
+    c = c || ctx;
     c.save();
+    // Clip to block area so face image doesn't bleed outside
     c.beginPath();
     c.rect(x + 1, y + 1, size - 2, size - 2);
     c.clip();
 
-    if (faceLoaded) {
+    if (faceImg) {
+      // Translate so drawFaceCover draws at (x+1, y+1)
       c.translate(x + 1, y + 1);
-      drawFaceCover(c, x, y, size - 2);
+      const drawn = drawFaceCover(c, size - 2);
       c.translate(-(x + 1), -(y + 1));
-      // Color tint overlay to distinguish piece types
-      c.fillStyle = color + '55';
-      c.fillRect(x + 1, y + 1, size - 2, size - 2);
+
+      if (drawn) {
+        // Semi-transparent color tint to distinguish piece types
+        c.fillStyle = color + '50';
+        c.fillRect(x + 1, y + 1, size - 2, size - 2);
+      } else {
+        c.fillStyle = color;
+        c.fillRect(x + 1, y + 1, size - 2, size - 2);
+      }
     } else {
       c.fillStyle = color;
       c.fillRect(x + 1, y + 1, size - 2, size - 2);
@@ -158,8 +176,9 @@
       c.fillRect(x + 1, y + size - 5, size - 2, 4);
     }
 
-    c.restore();
-    // Border
+    c.restore(); // restores clip and transform
+
+    // Border drawn outside clip (save/restore scope)
     c.strokeStyle = color;
     c.lineWidth = 1.5;
     c.strokeRect(x + 1.75, y + 1.75, size - 3.5, size - 3.5);
@@ -169,26 +188,33 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = 'rgba(255,255,255,0.04)';
     ctx.lineWidth = 0.5;
-    for (let r = 0; r < ROWS; r++) {
+    for (let r = 0; r < ROWS; r++)
       for (let c = 0; c < COLS; c++) {
         ctx.strokeRect(c * BLOCK, r * BLOCK, BLOCK, BLOCK);
         if (board[r][c]) drawBlock(COLORS[board[r][c]], c * BLOCK, r * BLOCK, BLOCK);
       }
-    }
   }
 
+  // Ghost: simple outlined rectangles — no drawBlock to avoid canvas state issues
   function drawGhost() {
     let gy = pieceY;
     while (!collides(board, piece, pieceX, gy + 1)) gy++;
     if (gy === pieceY) return;
-    ctx.globalAlpha = 0.2;
+    ctx.save();
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.45;
     for (let r = 0; r < piece.length; r++)
       for (let c = 0; c < piece[r].length; c++)
         if (piece[r][c]) {
-          ctx.fillStyle = COLORS[piece[r][c]];
-          ctx.fillRect((pieceX + c) * BLOCK + 1, (gy + r) * BLOCK + 1, BLOCK - 2, BLOCK - 2);
+          ctx.strokeStyle = COLORS[piece[r][c]];
+          ctx.strokeRect(
+            (pieceX + c) * BLOCK + 2,
+            (gy + r) * BLOCK + 2,
+            BLOCK - 4,
+            BLOCK - 4
+          );
         }
-    ctx.globalAlpha = 1;
+    ctx.restore();
   }
 
   function drawPiece() {
