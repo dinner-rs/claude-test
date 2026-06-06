@@ -28,7 +28,16 @@
     <section id="tetris" class="tetris-section">
       <h2>Tetris</h2>
       <div class="tetris-wrapper">
-        <canvas id="tetris-board" width="300" height="600"></canvas>
+        <div class="tetris-left">
+          <canvas id="tetris-board" width="300" height="600"></canvas>
+          <div class="tetris-touch">
+            <button class="t-btn" data-action="left">◀</button>
+            <button class="t-btn" data-action="rotate">↺</button>
+            <button class="t-btn" data-action="down">▼</button>
+            <button class="t-btn" data-action="right">▶</button>
+            <button class="t-btn t-btn-wide" data-action="drop">DROP</button>
+          </div>
+        </div>
         <div class="tetris-panel">
           <div class="panel-block">
             <p class="label">NEXT</p>
@@ -50,13 +59,6 @@
         </div>
       </div>
       <p class="tetris-hint">← → 移動 &nbsp;↑ / Z 回転 &nbsp;↓ 落下 &nbsp;Space ハードドロップ</p>
-      <div class="tetris-touch">
-        <button class="t-btn" data-action="left">◀</button>
-        <button class="t-btn" data-action="rotate">↺</button>
-        <button class="t-btn" data-action="down">▼</button>
-        <button class="t-btn" data-action="right">▶</button>
-        <button class="t-btn t-btn-wide" data-action="drop">DROP</button>
-      </div>
     </section>
 
     <section id="about" class="about">
