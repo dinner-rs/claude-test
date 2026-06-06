@@ -11,6 +11,7 @@
     <nav>
       <span class="logo">MyPage</span>
       <ul>
+        <li><a href="#tetris">Tetris</a></li>
         <li><a href="#about">About</a></li>
         <li><a href="#contact">Contact</a></li>
       </ul>
@@ -22,6 +23,40 @@
       <h1 id="typewriter"></h1>
       <p class="subtitle">シンプルで美しいホームページへようこそ。</p>
       <a href="#about" class="btn">Get Started</a>
+    </section>
+
+    <section id="tetris" class="tetris-section">
+      <h2>Tetris</h2>
+      <div class="tetris-wrapper">
+        <canvas id="tetris-board" width="300" height="600"></canvas>
+        <div class="tetris-panel">
+          <div class="panel-block">
+            <p class="label">NEXT</p>
+            <canvas id="tetris-next" width="120" height="120"></canvas>
+          </div>
+          <div class="panel-block">
+            <p class="label">SCORE</p>
+            <p id="tetris-score" class="value">0</p>
+          </div>
+          <div class="panel-block">
+            <p class="label">LEVEL</p>
+            <p id="tetris-level" class="value">1</p>
+          </div>
+          <div class="panel-block">
+            <p class="label">LINES</p>
+            <p id="tetris-lines" class="value">0</p>
+          </div>
+          <button id="tetris-start" class="btn">START</button>
+        </div>
+      </div>
+      <p class="tetris-hint">← → 移動 &nbsp;↑ / Z 回転 &nbsp;↓ 落下 &nbsp;Space ハードドロップ</p>
+      <div class="tetris-touch">
+        <button class="t-btn" data-action="left">◀</button>
+        <button class="t-btn" data-action="rotate">↺</button>
+        <button class="t-btn" data-action="down">▼</button>
+        <button class="t-btn" data-action="right">▶</button>
+        <button class="t-btn t-btn-wide" data-action="drop">DROP</button>
+      </div>
     </section>
 
     <section id="about" class="about">
@@ -40,5 +75,6 @@
   </footer>
 
   <script src="script.js"></script>
+  <script src="tetris.js"></script>
 </body>
 </html>
